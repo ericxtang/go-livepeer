@@ -66,28 +66,30 @@ jobs:
       - run: PKG_CONFIG_PATH=$HOME/compiled/lib/pkgconfig GOOS=linux go build -o ~/artifacts/livepeer_linux/livepeer cmd/livepeer/livepeer.go
       - run: PKG_CONFIG_PATH=$HOME/compiled/lib/pkgconfig GOOS=linux go build -o ~/artifacts/livepeer_linux/livepeer cmd/livepeer_cli/*
       - run: tar -cvzf ~/artifacts/livepeer_linux.tar.gz ~/artifacts/livepeer_linux/
-      - run: rm -rf ~/artifacts/livepeer_linux
 
       - run: PKG_CONFIG_PATH=$HOME/compiled/lib/pkgconfig GOOS=darwin go build -o ~/artifacts/livepeer_darwin/livepeer cmd/livepeer/livepeer.go
       - run: PKG_CONFIG_PATH=$HOME/compiled/lib/pkgconfig GOOS=darwin go build -o ~/artifacts/livepeer_darwin/livepeer cmd/livepeer_cli/*
       - run: tar -cvzf ~/artifacts/livepeer_darwin.tar.gz ~/artifacts/livepeer_darwin/
-      - run: rm -rf ~/artifacts/livepeer_darwin
 
       - run: PKG_CONFIG_PATH=$HOME/compiled/lib/pkgconfig GOOS=windows go build -o ~/artifacts/livepeer_windows/livepeer cmd/livepeer/livepeer.go
       - run: PKG_CONFIG_PATH=$HOME/compiled/lib/pkgconfig GOOS=windows go build -o ~/artifacts/livepeer_windows/livepeer cmd/livepeer_cli/*
       - run: tar -cvzf ~/artifacts/livepeer_windows.tar.gz ~/artifacts/livepeer_windows/
-      - run: rm -rf ~/artifacts/livepeer_windows
 
       - run:
           name: "Publish Release"
           command: |
-            VERSION=$(~/artifacts/hello_linux -version)
+            VERSION=$(~/artifacts/livepeer_linux/livepeer -version)
             HTTPS_URL="https://github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/releases/tag/${VERSION}"
             STATUS=$(curl -s -o /dev/null -w '%{http_code}' ${HTTPS_URL})
             if [ $STATUS -eq 200 ]; then
             	echo "Release Already Made"
             else
               go get github.com/tcnksm/ghr 
+
+              rm -rf ~/artifacts/livepeer_linux
+              rm -rf ~/artifacts/livepeer_darwin
+              rm -rf ~/artifacts/livepeer_windows
+
             	ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${VERSION} ~/artifacts/
             fi
 
