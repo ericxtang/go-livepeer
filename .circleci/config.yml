@@ -1,9 +1,9 @@
 version: 2
 jobs:
-  build:
+  run-test:
     docker:
       - image: circleci/golang:1.10.3-stretch
-    working_directory: /go/src/github.com/livepeer/go-livepeer
+    working_directory: /go/src/github.com/ericxtang/go-livepeer
 
     environment:
         PKG_CONFIG_PATH: $HOME/compiled/lib/pkgconfig
@@ -42,3 +42,71 @@ jobs:
 
       - store_test_results:
           path: /tmp/test-results
+
+  build-and-release:
+    docker:
+      - image: circleci/golang:1.10.3-stretch
+    working_directory: /go/src/github.com/ericxtang/go-livepeer
+
+    steps:
+      - checkout
+
+      - restore_cache:
+          keys:
+            - v3-pkg-cache
+
+      - run: go get -d ./...
+      - run: sudo apt-get update && sudo apt-get -y install build-essential pkg-config autoconf gnutls-dev
+      - run: ./install_ffmpeg.sh
+      - run: go get github.com/golang/glog
+      - run: go get github.com/ericxtang/m3u8
+      - run: go get github.com/aws/aws-sdk-go/aws
+      - run: go get -u google.golang.org/grpc
+      - run: go get github.com/jstemmer/go-junit-report
+
+      - run: GOOS=linux go build -o ~/artifacts/livepeer_linux/livepeer cmd/livepeer/livepeer.go
+      - run: GOOS=linux go build -o ~/artifacts/livepeer_linux/livepeer cmd/livepeer_cli/*
+      - run: tar -cvzf ~/artifacts/livepeer_linux.tar.gz ~/artifacts/livepeer_linux/
+      - run: rm -rf ~/artifacts/livepeer_linux
+
+      - run: GOOS=darwin go build -o ~/artifacts/livepeer_darwin/livepeer cmd/livepeer/livepeer.go
+      - run: GOOS=darwin go build -o ~/artifacts/livepeer_darwin/livepeer cmd/livepeer_cli/*
+      - run: tar -cvzf ~/artifacts/livepeer_darwin.tar.gz ~/artifacts/livepeer_darwin/
+      - run: rm -rf ~/artifacts/livepeer_darwin
+
+      - run: GOOS=windows go build -o ~/artifacts/livepeer_windows/livepeer cmd/livepeer/livepeer.go
+      - run: GOOS=windows go build -o ~/artifacts/livepeer_windows/livepeer cmd/livepeer_cli/*
+      - run: tar -cvzf ~/artifacts/livepeer_windows.tar.gz ~/artifacts/livepeer_windows/
+      - run: rm -rf ~/artifacts/livepeer_windows
+
+      - run:
+          name: "Publish Release"
+          command: |
+            VERSION=$(~/artifacts/hello_linux -version)
+            HTTPS_URL="https://github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/releases/tag/${VERSION}"
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' ${HTTPS_URL})
+            if [ $STATUS -eq 200 ]; then
+            	echo "Release Already Made"
+            else
+              go get github.com/tcnksm/ghr 
+            	ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${VERSION} ~/artifacts/
+            fi
+
+      - store_artifacts:
+          path: ~/artifacts
+
+      - save_cache:
+          key: v3-pkg-cache
+          paths:
+            - "/go/pkg"
+            - "/home/circleci/compiled"
+            - "/home/circleci/nasm/nasm"
+            - "/home/circleci/x264/x264"
+            - "/home/circleci/ffmpeg/libavcodec/libavcodec.a"
+
+workflows:
+  version: 2
+  main: 
+    jobs: 
+      - run-test
+      - build-and-release
